@@ -1,5 +1,6 @@
 package Master;
 
+import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 
@@ -7,19 +8,41 @@ public class Master {
 
     public static void main(String[] args) {
 
-        int port = 5000;
+        int clientPort = 5001;
+        int slavePort = 5000;
+        try{
 
-        try (ServerSocket ss = new ServerSocket(port)) {
-            System.out.println("Master listening on port " + port);
+            ServerSocket clientSocket = new ServerSocket(clientPort);
+            ServerSocket slaveSocket = new ServerSocket(slavePort);
 
-            Socket s = ss.accept();
+            //thread for client
+            new Thread(() -> {
+                while (true) {
+                    try {
+                        Socket s = clientSocket.accept();
+                        ClientHandler ch = new ClientHandler(s);
+                        new Thread(ch).start();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }).start();
 
-            while (true) {
-
-            }
-
+            //thread for slaves
+            new Thread(() -> {
+                while (true) {
+                    try {
+                        Socket s = slaveSocket.accept();
+                        SlaveHandler sh = new SlaveHandler(s);
+                        new Thread(sh).start();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }).start();
+        } catch (IOException e) {
+            e.printStackTrace();
         }
-
-
     }
+
 }
