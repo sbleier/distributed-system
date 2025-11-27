@@ -46,9 +46,9 @@ public class Slave {
         int sleepTime = jobType.equals(slaveType) ? 2 : 10;
 
         if (sleepTime == 2) {
-            System.out.println("Sleeping for 2 seconds for optimal job type…, be back soon");
+            System.out.println("Slave sleeping for 2 seconds for optimal job");
         } else {
-            System.out.println("Sleeping for 10 seconds for non-optimal job type…, be back soon");
+            System.out.println("Slave sleeping for 10 seconds for non-optimal job");
         }
 
         try {

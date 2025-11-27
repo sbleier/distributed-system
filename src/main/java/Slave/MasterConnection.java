@@ -24,6 +24,16 @@ public class MasterConnection {
         }
     }
 
+    public MasterConnection(Socket socket) {
+        try {
+            this.socket = socket;
+            reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            writer = new PrintWriter(socket.getOutputStream(), true);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     public void sendMessage(String msg) {
         writer.println(msg);
     }

@@ -1,186 +1,151 @@
 package Master;
 
+import Client.ClientReader;
+import Client.ClientWriter;
+import Slave.SlaveReader;
+import Slave.SlaveWriter;
+
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.Map;
-import java.util.Queue;
+import java.util.*;
 
 public class Master {
-    //Lock for the job queue - when clients add jobs
-    private static Object sharedObjJobQueue = new Object();
-    //Lock for slave status
-    private static Object sharedObjSlaveStatus = new Object();
-    //Lock for client connections
-    private static Object sharedObjClientMap = new Object();
 
-    //====SHARED DATA STRUCTURES - ACCESSED BY MULTIPLE THREADS - MUST BE PROTECTED
-    //Queue of jobs waiting to be assigned to slaves
+    private static final Object jobQueueLock = new Object();
+    private static final Object slaveWorkloadLock = new Object();
+    private static final Object clientMapLock = new Object();
+
     private static Queue<String> jobQueue = new LinkedList<>();
-    //track each slaves current workload
     private static Map<String, Integer> slaveWorkload = new HashMap<>();
-    //Map jobIds to the client socket that submitted them
     private static Map<String, Socket> jobToClientMap = new HashMap<>();
-    //Map to store slave sockets (SlaveA and SlaveB)
-    private static Map<String, Socket> slaveConnections = new HashMap<>();
 
+    private static Map<String, Queue<String>> clientOutgoingQueues = new HashMap<>();
+    private static Map<String, Queue<String>> slaveOutgoingQueues = new HashMap<>();
 
-    public static void main(String[] args) {
-        //initilize slave workload to 0
+    private static final Object clientQueueLock = new Object();
+    private static final Object slaveQueueLock = new Object();
+
+    public static void main(String[] args) throws IOException {
         slaveWorkload.put("A", 0);
         slaveWorkload.put("B", 0);
 
-        int clientPort = 5001;
-        int slavePort = 5000;
-        try{
+        int clientPort = 5002;
+        int slavePort = 5003;
 
-            ServerSocket clientSocket = new ServerSocket(clientPort);
-            ServerSocket slaveSocket = new ServerSocket(slavePort);
+        ServerSocket clientServer = new ServerSocket(clientPort);
+        ServerSocket slaveServer = new ServerSocket(slavePort);
 
-            //thread for client
-            new Thread(() -> {
-                while (true) {
-                    try {
-                        Socket s = clientSocket.accept();
-                        ClientHandler ch = new ClientHandler(s);
-                        new Thread(ch).start();
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
+        // Accept clients
+        new Thread(() -> {
+            while (true) {
+                try {
+                    Socket s = clientServer.accept();
+                    String clientId = UUID.randomUUID().toString();
+                    registerClient(clientId, s);
+                } catch (IOException e) {
+                    e.printStackTrace();
                 }
-            }).start();
+            }
+        }).start();
 
-            //thread for slaves
-            new Thread(() -> {
-                while (true) {
-                    try {
-                        Socket s = slaveSocket.accept();
-                        SlaveHandler sh = new SlaveHandler(s);
-                        new Thread(sh).start();
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
+        // Accept slaves
+        new Thread(() -> {
+            while (true) {
+                try {
+                    Socket s = slaveServer.accept();
+                    // For simplicity, let slaves send their type as first message
+                    Scanner sc = new Scanner(s.getInputStream());
+                    String slaveType = sc.nextLine().trim();
+                    registerSlave(slaveType, s);
+                } catch (IOException e) {
+                    e.printStackTrace();
                 }
-            }).start();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+            }
+        }).start();
+
+        startJobDispatcher();
     }
 
-    // Job dispatcher thread (consumer in producer-consumer pattern)
     private static void startJobDispatcher() {
         new Thread(() -> {
             while (true) {
-                String job = null;
-
-                synchronized(sharedObjJobQueue) {
+                String job;
+                synchronized (jobQueueLock) {
                     while (jobQueue.isEmpty()) {
-                        try {
-                            sharedObjJobQueue.wait();
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
+                        try { jobQueueLock.wait(); }
+                        catch (InterruptedException e) { e.printStackTrace(); }
                     }
                     job = jobQueue.poll();
                 }
-
-                if (job != null) {
-                    String bestSlave = calculateBestSlave(job);
-                    System.out.println("Assigning job " + job + " to Slave-" + bestSlave);
-                    assignJobToSlave(job, bestSlave);
-                }
+                String bestSlave = calculateBestSlave(job);
+                assignJobToSlave(job, bestSlave);
             }
         }).start();
     }
 
-    // Calculate which slave should receive the job based on current workload
     private static String calculateBestSlave(String job) {
-        String[] parts = job.split("\\|");
-        String jobType = parts[0];
-
-        synchronized(sharedObjSlaveStatus) {
-            int slaveALoad = slaveWorkload.get("A");
-            int slaveBLoad = slaveWorkload.get("B");
-
-            // Calculate completion time for each slave
-            int timeIfSlaveA = slaveALoad + (jobType.equals("A") ? 2 : 10);
-            int timeIfSlaveB = slaveBLoad + (jobType.equals("B") ? 2 : 10);
-
-            System.out.println("Load calculation: Slave-A would take " + timeIfSlaveA +
-                    " sec, Slave-B would take " + timeIfSlaveB + " sec");
-
-            // Choose slave with lower completion time
-            String chosenSlave = (timeIfSlaveA <= timeIfSlaveB) ? "A" : "B";
-
-            // Update workload
-            int jobTime = jobType.equals(chosenSlave) ? 2 : 10;
-            slaveWorkload.put(chosenSlave, slaveWorkload.get(chosenSlave) + jobTime);
-
-            return chosenSlave;
+        String jobType = job.split("\\|")[0];
+        synchronized(slaveWorkloadLock) {
+            int timeA = slaveWorkload.get("A") + (jobType.equals("A") ? 2 : 10);
+            int timeB = slaveWorkload.get("B") + (jobType.equals("B") ? 2 : 10);
+            String chosen = (timeA <= timeB) ? "A" : "B";
+            int jobTime = jobType.equals(chosen) ? 2 : 10;
+            slaveWorkload.put(chosen, slaveWorkload.get(chosen) + jobTime);
+            return chosen;
         }
     }
 
-    // Send job to the appropriate slave
     private static void assignJobToSlave(String job, String slaveType) {
-        synchronized(sharedObjSlaveStatus) {
-            Socket slaveSocket = slaveConnections.get(slaveType);
-            if (slaveSocket != null) {
-                try {
-                    java.io.PrintWriter writer = new java.io.PrintWriter(slaveSocket.getOutputStream(), true);
-                    writer.println(job);
-                } catch (IOException e) {
-                    System.out.println("Error sending job to Slave-" + slaveType);
-                    e.printStackTrace();
-                }
-            }
+        synchronized(slaveQueueLock) {
+            Queue<String> q = slaveOutgoingQueues.get(slaveType);
+            if (q != null) q.add(job);
         }
     }
 
-    // Add job to queue (called by ClientHandler)
-    public static void addJobToQueue(String job, Socket clientSocket) {
-        synchronized(sharedObjJobQueue) {
+    public static void addJobToQueue(String job, String clientId, Socket clientSocket) {
+        synchronized(jobQueueLock) {
             jobQueue.add(job);
-            System.out.println("Job added to queue: " + job);
-
-            synchronized(sharedObjClientMap) {
-                String jobId = job.split("\\|")[1];
-                jobToClientMap.put(jobId, clientSocket);
-            }
-
-            sharedObjJobQueue.notify();
+            synchronized(clientMapLock) { jobToClientMap.put(job.split("\\|")[1], clientSocket); }
+            jobQueueLock.notify();
         }
     }
 
-    // Handle job completion (called by SlaveHandler)
     public static void jobCompleted(String jobId, String slaveType) {
-        synchronized(sharedObjSlaveStatus) {
+        synchronized(slaveWorkloadLock) {
             slaveWorkload.put(slaveType, Math.max(0, slaveWorkload.get(slaveType) - 2));
-            System.out.println("Slave-" + slaveType + " completed job " + jobId);
         }
-
-        // Notify the client
-        synchronized(sharedObjClientMap) {
+        synchronized(clientMapLock) {
             Socket clientSocket = jobToClientMap.get(jobId);
             if (clientSocket != null) {
-                try {
-                    java.io.PrintWriter writer = new java.io.PrintWriter(clientSocket.getOutputStream(), true);
-                    writer.println("DISTRIB SYS – Job Completion Confirmation for " + jobId);
-                    System.out.println("Notified client of completion for job " + jobId);
-                } catch (IOException e) {
-                    System.out.println("Error notifying client");
-                    e.printStackTrace();
+                synchronized(clientQueueLock) {
+                    Queue<String> q = clientOutgoingQueues.get(getClientIdFromSocket(clientSocket));
+                    if (q != null) q.add("Job " + jobId + " completed");
                 }
             }
         }
     }
 
-    // Register slave connection (called by SlaveHandler)
+    public static void registerClient(String clientId, Socket socket) {
+        synchronized(clientQueueLock) { clientOutgoingQueues.put(clientId, new LinkedList<>()); }
+        new Thread(new ClientReader(clientId, socket)).start();
+        new Thread(new ClientWriter(clientId, socket)).start();
+    }
+
     public static void registerSlave(String slaveType, Socket socket) {
-        synchronized(sharedObjSlaveStatus) {
-            slaveConnections.put(slaveType, socket);
-            System.out.println("Slave-" + slaveType + " registered");
-        }
+        synchronized(slaveQueueLock) { slaveOutgoingQueues.put(slaveType, new LinkedList<>()); }
+        new Thread(new SlaveReader(slaveType, socket)).start();
+        new Thread(new SlaveWriter(slaveType, socket)).start();
+    }
+
+    public static Object getClientQueueLock() { return clientQueueLock; }
+    public static Object getSlaveQueueLock() { return slaveQueueLock; }
+    public static Queue<String> getClientOutgoingQueue(String clientId) { return clientOutgoingQueues.get(clientId); }
+    public static Queue<String> getSlaveOutgoingQueue(String slaveType) { return slaveOutgoingQueues.get(slaveType); }
+
+    private static String getClientIdFromSocket(Socket socket) {
+        // In practice, you would map socket -> clientId
+        // For this skeleton, return a placeholder
+        return socket.toString();
     }
 }
