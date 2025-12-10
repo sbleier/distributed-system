@@ -8,7 +8,7 @@ public class Client {
 
     public static void main(String[] args) {
         // Connect to master
-        MasterConnection connection = new MasterConnection("localhost", 5001);
+        MasterConnection connection = new MasterConnection("localhost", 5002);
 
         //should start sending jobs to master - maybe we should make an array of jobs
         //TODO make list (maybe hashmap?) of jobs of either type A or B
