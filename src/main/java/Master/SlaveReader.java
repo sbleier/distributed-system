@@ -1,6 +1,6 @@
-package Slave;
+package Master;
 
-import Master.Master;
+import Slave.MasterConnection;
 
 import java.io.IOException;
 import java.net.Socket;
@@ -21,7 +21,7 @@ public class SlaveReader implements Runnable {
                 String msg = masterConnection.readMessage();
                 if (msg == null) break; // connection closed
                 // If this is a job completion from the slave, notify master
-                if (msg.startsWith("JOB_DONE|")) {
+                if (msg.startsWith("Job Complete")) {
                     String jobId = msg.split("\\|")[1];
                     Master.jobCompleted(jobId, slaveType);
                 }

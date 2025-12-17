@@ -1,6 +1,4 @@
-package Client;
-
-import Master.Master;
+package Master;
 
 import java.io.IOException;
 import java.io.PrintWriter;

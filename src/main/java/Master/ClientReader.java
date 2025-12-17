@@ -1,6 +1,4 @@
-package Client;
-
-import Master.Master;
+package Master;
 
 import java.io.*;
 import java.net.Socket;
@@ -20,7 +18,7 @@ public class ClientReader implements Runnable {
             String msg;
             while ((msg = reader.readLine()) != null) {
                 // Assume msg format: "JobType|JobId"
-                Master.addJobToQueue(msg, clientId, socket);
+                Master.addJobToQueue(msg, clientId);
             }
         } catch (IOException e) {
             e.printStackTrace();

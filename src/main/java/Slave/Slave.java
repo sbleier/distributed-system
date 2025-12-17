@@ -17,7 +17,7 @@ public class Slave {
 
         try {
             // Connect to master
-            MasterConnection connection = new MasterConnection("localhost", 5000);
+            MasterConnection connection = new MasterConnection("localhost", 5003);
 
             // Register with master
             connection.sendMessage(slaveType);
@@ -60,6 +60,6 @@ public class Slave {
         System.out.println("Job " + jobId + " complete");
 
         // Send completion message to master
-        connection.sendMessage("COMPLETE|" + jobId);
+        connection.sendMessage("Job Complete|" + jobId);
     }
 }

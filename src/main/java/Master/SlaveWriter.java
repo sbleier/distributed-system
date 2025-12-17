@@ -1,8 +1,7 @@
-package Slave;
+package Master;
 
-import Master.Master;
+import Slave.MasterConnection;
 
-import java.io.IOException;
 import java.net.Socket;
 import java.util.Queue;
 
