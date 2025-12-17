@@ -11,8 +11,6 @@ public class Client {
         MasterConnection connection = new MasterConnection("localhost", 5002);
 
         //should start sending jobs to master - maybe we should make an array of jobs
-        //TODO make list (maybe hashmap?) of jobs of either type A or B
-        //TODO call method from MasterConnection to start sending jobs?
 
         // Start thread to listen for completion messages
         new Thread(() -> {
