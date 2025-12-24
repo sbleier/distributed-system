@@ -57,7 +57,8 @@ public class Slave {
             e.printStackTrace();
         }
 
-        System.out.println("Job " + jobId + " complete");
+        System.out.println("[COMPLETED] Slave-" + slaveType + " finished job " + jobType + "|" + jobId);
+        System.out.println("Slave informing master that job " + jobId + " is complete");
 
         // Send completion message to master
         connection.sendMessage("Job Complete|" + jobId);

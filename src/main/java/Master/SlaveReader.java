@@ -23,6 +23,7 @@ public class SlaveReader implements Runnable {
                 // If this is a job completion from the slave, notify master
                 if (msg.startsWith("Job Complete")) {
                     String jobId = msg.split("\\|")[1];
+                    System.out.println("Master received completion from Slave-" + slaveType + " for job " + jobId); //to log it
                     Master.jobCompleted(jobId, slaveType);
                 }
             }
