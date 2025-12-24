@@ -14,6 +14,7 @@ public class Master {
     private static final Object clientMapLock = new Object();
     private static final Object clientQueueLock = new Object();
     private static final Object slaveQueueLock = new Object();
+    private static int nextClientNum = 1;
 
     //queue for jobs
     private static Queue<String> jobQueue = new LinkedList<>();
@@ -48,8 +49,8 @@ public class Master {
             while (true) {
                 try {
                     Socket s = clientServer.accept();
-                    //randomize client ID
-                    String clientId = UUID.randomUUID().toString();
+                    //incremental client ID
+                    String clientId = "Client-" + nextClientNum++;
                     System.out.println("Client connected: " + clientId + " from " + s.getRemoteSocketAddress());
                     registerClient(clientId, s);
                 } catch (IOException e) {
@@ -66,7 +67,7 @@ public class Master {
                     //slaves passes in type as argument
                     Scanner sc = new Scanner(s.getInputStream());
                     String slaveType = sc.nextLine().trim();
-                    System.out.println("Slave connected: type=" + slaveType + " from " + s.getRemoteSocketAddress());
+                    System.out.println("[CONNECT] Slave connected: type=" + slaveType + " from " + s.getRemoteSocketAddress());
                     registerSlave(slaveType, s);
                 } catch (IOException e) {
                     e.printStackTrace();
@@ -92,10 +93,10 @@ public class Master {
                     //when there's a job added, get it
                     job = jobQueue.poll();
                 }
-                System.out.println("Dispatching job: " + job);
+                System.out.println("[DISPATCH] Dispatching job: " + job);
                 //find best slave
                 String bestSlave = calculateBestSlave(job);
-                System.out.println("Assigned job " + job + " to slave type " + bestSlave);
+                System.out.println("[ASSIGNED] Assigned job " + job + " to Slave- " + bestSlave);
                 //assign job to slave
                 assignJobToSlave(job, bestSlave);
             }
@@ -128,7 +129,7 @@ public class Master {
             Queue<String> q = slaveOutgoingQueues.get(slaveType);
             if (q != null) {
                 q.add(job);
-                System.out.println("Enqueued job for slave " + slaveType + ": " + job);
+                System.out.println("[QUEUE] Enqueued job for slave " + slaveType + ": " + job);
             } else {
                 System.out.println("No slave queue for type " + slaveType + " (job dropped): " + job);
             }
@@ -145,7 +146,7 @@ public class Master {
             synchronized(clientMapLock) {
                 jobToClientMap.put(jobId, clientId);
             }
-            System.out.println("Added job " + job + " from client " + clientId);
+            System.out.println("[RECEIVED] Job " + job + " from " + clientId);
             jobQueueLock.notify();
         }
     }
@@ -162,8 +163,7 @@ public class Master {
         if (clientId != null) {
             synchronized(clientQueueLock) {
                 clientOutgoingQueues.get(clientId).add("Job " + jobId + " completed");
-                System.out.println("Notified client " + clientId + " about completion of job " + jobId);
-
+                System.out.println("[NOTIFIED] Sent completion of job " + jobId + " to " + clientId);
             }
         } else {
             System.out.println("No client mapping for completed job " + jobId);

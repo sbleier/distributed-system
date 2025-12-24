@@ -17,7 +17,7 @@ public class Client {
             try {
                 String message;
                 while ((message = connection.readMessage()) != null) {
-                    System.out.println(message);
+                    System.out.println("\n[COMPLETED] " + message);
                 }
             } catch (IOException e) {
                 System.out.println("Disconnected from Master");
@@ -26,12 +26,17 @@ public class Client {
 
         // Get jobs from user
         Scanner scanner = new Scanner(System.in);
+        int jobIdCounter = 1;
         while (true) {
             System.out.print("Enter job type (A or B): ");
-            String type = scanner.nextLine().toUpperCase();
+            String type = scanner.nextLine().trim().toUpperCase();
 
-            System.out.print("Enter job ID: ");
-            String id = scanner.nextLine();
+            if (type.isEmpty()) {
+                continue;
+            }
+
+            String id = String.valueOf(jobIdCounter);
+            jobIdCounter++;
 
             String job = type + "|" + id;
             connection.sendMessage(job);
