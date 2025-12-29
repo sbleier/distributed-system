@@ -1,4 +1,9 @@
-// java
+/*
+Sara Bleier
+T00510465
+Leora Spinner
+T00498388
+ */
 package Master;
 
 import java.io.IOException;

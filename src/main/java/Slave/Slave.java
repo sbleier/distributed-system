@@ -1,3 +1,9 @@
+/*
+Sara Bleier
+T00510465
+Leora Spinner
+T00498388
+ */
 package Slave;
 
 import java.io.IOException;
